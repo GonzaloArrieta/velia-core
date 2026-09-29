@@ -11,7 +11,7 @@ def responder (mensaje: str) -> str:
         "https://api.groq.com/openai/v1/chat/completions",
         headers={"Authorization": f"Bearer {GROQ_API_KEY}"},
         json={
-            "model": "openai/gpt-oss-20b",
+            "model": MODELO, 
             "messages": [
                 {"role": "system", "content": "Sos el asistente de una inmobiliaria. Respondé en una o dos frases."},
                 {"role": "user", "content": mensaje},
