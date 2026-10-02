@@ -1,13 +1,16 @@
+import uuid
 from fastapi.testclient import TestClient
 from parser import app
 
 client = TestClient (app)  
 
+def nuevo_id():
+    return f"TEST_{uuid.uuid4().hex}"
 
 def test_mensaje_nuevo_devuelve_ok():
     payload = {
         "data": {
-            "key": {"id": "MSG_001", "remoteJid": "5491160061295@s.whatsapp.net"},
+            "key": {"id": nuevo_id(), "remoteJid": "5491160061295@s.whatsapp.net"},
             "message": {"conversation": "hola"}    
         }
     }
@@ -18,7 +21,7 @@ def test_mensaje_nuevo_devuelve_ok():
 def test_payload_sin_texto_no_rompe ():
     payload = {
         "data": {
-            "key": {"id": "MSG_002", "remoteJid": "5491160061295@s.whatsapp.net"},
+            "key": {"id": nuevo_id(), "remoteJid": "5491160061295@s.whatsapp.net"},
             "message": {"conversation": ""}
         }
     }
@@ -28,7 +31,7 @@ def test_payload_sin_texto_no_rompe ():
 def test_mensaje_duplicado_se_ignora():
     payload = {
         "data": {
-            "key": {"id": "MSG_003", "remoteJid": "5491160061295@s.whatsapp.net"},
+            "key": {"id": nuevo_id(), "remoteJid": "5491160061295@s.whatsapp.net"},
             "message": {"conversation": "hola"}
         }
     }
