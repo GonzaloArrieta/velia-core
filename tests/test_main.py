@@ -1,6 +1,6 @@
 import uuid
 from fastapi.testclient import TestClient
-from parser import app
+from main import app
 
 client = TestClient (app)  
 
