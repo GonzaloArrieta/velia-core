@@ -32,3 +32,4 @@ jobs:
           - run: pip install -r requirements.txt
           - run: psql "$DATABASE_URL" -f schema.sql
           - run: pytest -v
+          - run: docker build -t velia-core .
