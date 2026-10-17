@@ -40,9 +40,27 @@ python -m pytest -v
 - **Deduplicación en la base, no en memoria.** El webhook puede recibir el mismo mensaje más de una vez. La restricción única en PostgreSQL sigue funcionando aunque el servidor se reinicie o lleguen dos webhooks a la vez.
 - **Tests repetibles.** Cada test genera un ID único con `uuid`, así el resultado no depende de lo que quedó guardado en la base.
 
+## Clasificador de mensajes
+
+`src/clasificador.py` clasifica cada mensaje en `lead`, `cliente` o `spam` usando un modelo vía Groq, con `temperature 0`. Si el modelo responde algo fuera de esas tres categorías, el mensaje queda como `desconocido` en lugar de inventar una.
+
+### Set de evaluación
+
+`evals/mensajes.csv` tiene 20 mensajes reales del rubro inmobiliario con su categoría correcta, incluidos casos difíciles (audios transcriptos sin tildes, inquilinos que preguntan por otra propiedad, spam disfrazado).
+
+```
+python evals/run_evals.py
+```
+
+Resultado actual: **20/20**. La primera versión dio 19/20: un inquilino que preguntaba por otra propiedad salió como lead. Definí la regla de negocio (sigue siendo cliente), la agregué al prompt y volví a medir para confirmar que no se rompiera ningún otro caso.
+
+## CI
+
+En cada push, GitHub Actions levanta un PostgreSQL temporal, crea la tabla desde `schema.sql`, corre los tests y construye la imagen de Docker. Los tests no usan la base de producción ni llaman a la API del modelo.
+
 ## Próximos pasos
 
-- Conectar el webhook con el LLM, con tests que no llamen a la API real.
-- Que los tests no dependan de la base real (hoy usan Supabase).
+- Conectar el clasificador al webhook, con tests que reemplacen al modelo por uno falso (en curso).
+- Guardar la categoría de cada mensaje en la base.
 - Validar un token secreto en el webhook.
-- Dockerfile, deploy y CI con GitHub Actions.
+- Deploy en Easypanel.
