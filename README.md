@@ -7,7 +7,7 @@ Núcleo en Python de **Velia**, un agente de IA para WhatsApp que clasifica conv
 - Recibe mensajes de WhatsApp (formato de Evolution API) en un webhook con FastAPI.
 - Valida el payload con Pydantic.
 - Descarta mensajes duplicados con una restricción única en PostgreSQL (Supabase).
-- Incluye un cliente para llamar a un LLM vía Groq, con el modelo configurable por variable de entorno (todavía no está conectado al webhook).
+- Clasifica cada mensaje nuevo como lead, cliente o spam con un LLM vía Groq y devuelve la categoría en la respuesta del webhook. Si el mensaje llega vacío, no llama al modelo.
 
 ## Stack
 
@@ -39,6 +39,8 @@ python -m pytest -v
 
 - **Deduplicación en la base, no en memoria.** El webhook puede recibir el mismo mensaje más de una vez. La restricción única en PostgreSQL sigue funcionando aunque el servidor se reinicie o lleguen dos webhooks a la vez.
 - **Tests repetibles.** Cada test genera un ID único con `uuid`, así el resultado no depende de lo que quedó guardado en la base.
+- **El modelo solo se llama si hace falta.** Un mensaje vacío (por ejemplo, un sticker) queda como `desconocido` sin gastar una llamada a la API.
+- **El LLM se reemplaza en los tests.** Con `monkeypatch`, los tests usan un clasificador falso: son rápidos, gratis y siempre dan el mismo resultado. La calidad del modelo se mide aparte, con el set de evaluación.
 
 ## Clasificador de mensajes
 
@@ -60,7 +62,6 @@ En cada push, GitHub Actions levanta un PostgreSQL temporal, crea la tabla desde
 
 ## Próximos pasos
 
-- Conectar el clasificador al webhook, con tests que reemplacen al modelo por uno falso (en curso).
 - Guardar la categoría de cada mensaje en la base.
 - Validar un token secreto en el webhook.
 - Deploy en Easypanel.
