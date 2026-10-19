@@ -1,8 +1,14 @@
 import uuid
+import pytest
 from fastapi.testclient import TestClient
+import main
 from main import app
 
 client = TestClient (app)  
+
+@pytest.fixture(autouse=True)
+def clasificador_falso(monkeypatch):
+    monkeypatch.setattr(main, "clasificar", lambda texto: "lead")
 
 def nuevo_id():
     return f"TEST_{uuid.uuid4().hex}"
@@ -39,3 +45,24 @@ def test_mensaje_duplicado_se_ignora():
     segunda = client.post("/webhook/whatsapp", json=payload)
     assert primera.json()["status"] == "ok"
     assert segunda.json()["status"] == "ignorado"
+
+def test_mensaje_nuevo_trae_categoria():
+    payload = {
+        "data": {
+            "key": {"id": nuevo_id(), "remoteJid": "5491160061295@s.whatsapp.net"},
+            "message": {"conversation": "Hola, vi el depto"}
+        }
+    }
+    respuesta = client.post("/webhook/whatsapp", json=payload)
+    assert respuesta.json()["categoria"] == "lead"
+
+
+def test_mensaje_vacio_no_llama_al_modelo():
+    payload = {
+        "data": {
+            "key": {"id": nuevo_id(), "remoteJid": "5491160061295@s.whatsapp.net"},
+            "message": {"conversation": ""}
+        }
+    }
+    respuesta = client.post("/webhook/whatsapp", json=payload)
+    assert respuesta.json()["categoria"] == "desconocido"

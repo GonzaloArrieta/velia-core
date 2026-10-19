@@ -3,6 +3,7 @@ from pydantic import BaseModel
 import uvicorn
 from psycopg.errors import UniqueViolation
 from db import get_conn  # Importamos tu conexión a Postgres
+from clasificador import clasificar # Importamos la función de clasificación
 
 # 1. Modelos Pydantic
 class KeyInfo(BaseModel):
@@ -41,14 +42,19 @@ def recibir_mensaje(payload: EvolutionWebhook):
     jid = payload.data.key.remoteJid
     texto = payload.data.message.conversation
     telefono = jid.split("@")[0]
-    
+ 
     # 4. Freno de seguridad de Postgres
     if not registrar_mensaje(mensaje_id, telefono):
         print(f"Freno de BD: Mensaje {mensaje_id} duplicado. Ignorando.")
         return {"status": "ignorado", "motivo": "duplicado"}
         
-    print(f"Nuevo mensaje de {telefono}: {texto}")
-    return {"status": "ok", "telefono": telefono}
+    if texto.strip():
+        categoria = clasificar(texto)
+    else:
+        categoria = "desconocido"
+
+    print(f"Nuevo mensaje de {telefono} ({categoria}): {texto}")
+    return {"status": "ok", "telefono": telefono, "categoria": categoria}
 
 if __name__ == "__main__":
     uvicorn.run(app, host="127.0.0.1", port=8000)
