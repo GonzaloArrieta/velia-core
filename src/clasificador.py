@@ -14,8 +14,9 @@ Clasificá el mensaje en UNA de estas categorías:
 - cliente: alguien que ya opera con la inmobiliaria (contrato, llaves, pagos, reclamos).
 - spam: publicidad, cadenas, estafas o mensajes que no tienen que ver con la inmobiliaria.
 Si la persona dice que ya alquila, es propietaria o tiene un contrato con la inmobiliaria, es cliente aunque pregunte por otra propiedad.
+Si la persona reporta un problema en la propiedad que alquila o habita (pérdida de agua, algo roto, reclamo de mantenimiento), es cliente.
+Si el mensaje es solo un saludo o es muy corto y sin contexto (por ejemplo "hola" o "buenas"), es lead: es alguien que recién empieza a consultar.
 Respondé solo con una palabra: lead, cliente o spam."""
-
 
 def normalizar(respuesta: str) -> str:
     palabra = respuesta.strip().lower().strip(".!")
