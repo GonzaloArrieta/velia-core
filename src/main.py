@@ -33,6 +33,14 @@ def registrar_mensaje(mensaje_id: str, telefono: str):
     except UniqueViolation:
         return False
 
+def guardar_categoria(mensaje_id: str, categoria: str):
+    """Guarda la categoría del mensaje en la fila que ya registramos."""
+    with get_conn() as conn:
+        conn.execute(
+            "update public.mensajes_procesados set categoria = %s where message_id = %s",
+            (categoria, mensaje_id)
+        )
+
 # 3. Inicialización de la app
 app = FastAPI()
 
@@ -53,6 +61,8 @@ def recibir_mensaje(payload: EvolutionWebhook):
     else:
         categoria = "desconocido"
 
+    guardar_categoria(mensaje_id, categoria)
+    
     print(f"Nuevo mensaje de {telefono} ({categoria}): {texto}")
     return {"status": "ok", "telefono": telefono, "categoria": categoria}
 

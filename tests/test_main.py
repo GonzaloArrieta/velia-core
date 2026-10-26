@@ -3,6 +3,7 @@ import pytest
 from fastapi.testclient import TestClient
 import main
 from main import app
+from db import get_conn
 
 client = TestClient (app)  
 
@@ -66,3 +67,19 @@ def test_mensaje_vacio_no_llama_al_modelo():
     }
     respuesta = client.post("/webhook/whatsapp", json=payload)
     assert respuesta.json()["categoria"] == "desconocido"
+
+def test_categoria_se_guarda_en_la_base():
+    mensaje_id = nuevo_id()
+    payload = {
+        "data": {
+            "key": {"id": mensaje_id, "remoteJid": "5491160061295@s.whatsapp.net"},
+            "message": {"conversation": "Hola, vi el depto"}
+        }
+    }
+    client.post("/webhook/whatsapp", json=payload)
+    with get_conn() as conn:
+        fila = conn.execute(
+            "select categoria from public.mensajes_procesados where message_id = %s",
+            (mensaje_id,)
+        ).fetchone()
+    assert fila[0] == "lead"
