@@ -1,9 +1,12 @@
-from fastapi import FastAPI
+import os
+import secrets 
+from fastapi import FastAPI, Header, HTTPException, Depends, Query
 from pydantic import BaseModel
 import uvicorn
 from psycopg.errors import UniqueViolation
 from db import get_conn  # Importamos tu conexión a Postgres
 from clasificador import clasificar # Importamos la función de clasificación
+WEBHOOK_TOKEN = os.environ.get("WEBHOOK_TOKEN")
 
 # 1. Modelos Pydantic
 class KeyInfo(BaseModel):
@@ -41,10 +44,20 @@ def guardar_categoria(mensaje_id: str, categoria: str):
             (categoria, mensaje_id)
         )
 
+def verificar_token(
+        x_webhook_token: str | None = Header(default=None),
+        token: str | None = Query(default=None),
+):
+
+        recibido = x_webhook_token or token
+
+        if not WEBHOOK_TOKEN or not recibido or not secrets.compare_digest(recibido, WEBHOOK_TOKEN):
+            raise HTTPException(status_code=401, detail="Token inválido")
+
 # 3. Inicialización de la app
 app = FastAPI()
 
-@app.post("/webhook/whatsapp")
+@app.post("/webhook/whatsapp", dependencies=[Depends(verificar_token)])
 def recibir_mensaje(payload: EvolutionWebhook):
     mensaje_id = payload.data.key.id
     jid = payload.data.key.remoteJid

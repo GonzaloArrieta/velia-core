@@ -5,11 +5,15 @@ import main
 from main import app
 from db import get_conn
 
-client = TestClient (app)  
+client = TestClient(app, headers={"X-Webhook-Token": "token-de-prueba"})  
 
 @pytest.fixture(autouse=True)
 def clasificador_falso(monkeypatch):
     monkeypatch.setattr(main, "clasificar", lambda texto: "lead")
+
+@pytest.fixture(autouse=True)
+def token_de_prueba(monkeypatch):
+    monkeypatch.setattr(main, "WEBHOOK_TOKEN", "token-de-prueba")
 
 def nuevo_id():
     return f"TEST_{uuid.uuid4().hex}"
@@ -74,7 +78,8 @@ def test_categoria_se_guarda_en_la_base():
         "data": {
             "key": {"id": mensaje_id, "remoteJid": "5491160061295@s.whatsapp.net"},
             "message": {"conversation": "Hola, vi el depto"}
-        }
+        }   
+   
     }
     client.post("/webhook/whatsapp", json=payload)
     with get_conn() as conn:
@@ -83,3 +88,35 @@ def test_categoria_se_guarda_en_la_base():
             (mensaje_id,)
         ).fetchone()
     assert fila[0] == "lead"
+
+def test_sin_toke_devuelve_401():
+    payload = {
+        "data": {
+            "key": {"id": nuevo_id(), "remoteJid": "5491160061295@s.whatsapp.net"},
+            "message": {"conversation": "hola"}
+        }
+    }
+    sin_token = TestClient(app)
+    respuesta = sin_token.post("/webhook/whatsapp", json=payload)
+    assert respuesta.status_code == 401
+
+def test_token_incorrecto_devuelve_401():
+    payload = {
+        "data": {
+            "key": {"id": nuevo_id(), "remoteJid": "5491160061295@s.whatsapp.net"},
+            "message": {"conversation": "Hola, vi el depto"}
+        }
+    }
+    respuesta = client.post("/webhook/whatsapp", json=payload, headers={"X-Webhook-Token": "cualquiera"})
+    assert respuesta.status_code == 401
+
+def test_token_por_url_funciona():
+    payload = {
+        "data": {
+            "key": {"id": nuevo_id(), "remoteJid": "5491160061295@s.whatsapp.net"},
+            "message": {"conversation": "Hola, vi el depto"}
+        }
+    }
+    sin_header = TestClient(app)
+    respuesta = sin_header.post("/webhook/whatsapp?token=token-de-prueba", json=payload)
+    assert respuesta.status_code == 200
