@@ -2,6 +2,7 @@ from db import get_conn
 from embeddings import generar_embedding
 from cargar_embeddings import vector_a_texto
 
+
 def buscar_propiedades(
     pregunta: str,
     cantidad: int = 3,
@@ -9,6 +10,7 @@ def buscar_propiedades(
     zona: str | None = None,
     precio_max: float | None = None,
     moneda: str | None = None,
+    similitud_minima: float = 0.40,
 ) -> list[dict]:
     vector = vector_a_texto(generar_embedding(pregunta))
 
@@ -52,6 +54,7 @@ def buscar_propiedades(
             "similitud": round(f[5], 2),
         }
         for f in filas
+        if f[5] >= similitud_minima
     ]
 
 
