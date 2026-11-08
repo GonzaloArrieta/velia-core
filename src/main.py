@@ -13,8 +13,12 @@ class KeyInfo(BaseModel):
     remoteJid: str
     id: str
 
+class ExtendedText(BaseModel):
+    text: str
+
 class MessageInfo(BaseModel):
-    conversation: str
+    conversation: str | None = None
+    extendedTextMessage: ExtendedText | None = None
 
 class DataPayload(BaseModel):
     key: KeyInfo
@@ -22,6 +26,13 @@ class DataPayload(BaseModel):
 
 class EvolutionWebhook(BaseModel):
     data: DataPayload
+
+def extraer_texto(message: MessageInfo) -> str:
+    if message.conversation:
+        return message.conversation
+    if message.extendedTextMessage:
+        return message.extendedTextMessage.text
+    return ""
 
 # 2. Lógica de Base de Datos
 def registrar_mensaje(mensaje_id: str, telefono: str):
@@ -61,7 +72,7 @@ app = FastAPI()
 def recibir_mensaje(payload: EvolutionWebhook):
     mensaje_id = payload.data.key.id
     jid = payload.data.key.remoteJid
-    texto = payload.data.message.conversation
+    texto = extraer_texto(payload.data.message)
     telefono = jid.split("@")[0]
  
     # 4. Freno de seguridad de Postgres
@@ -75,9 +86,10 @@ def recibir_mensaje(payload: EvolutionWebhook):
         categoria = "desconocido"
 
     guardar_categoria(mensaje_id, categoria)
-    
+
     print(f"Nuevo mensaje de {telefono} ({categoria}): {texto}")
     return {"status": "ok", "telefono": telefono, "categoria": categoria}
 
 if __name__ == "__main__":
     uvicorn.run(app, host="127.0.0.1", port=8000)
+

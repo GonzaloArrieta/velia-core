@@ -18,8 +18,9 @@ velia-core es el núcleo en Python de Velia, un agente de IA para WhatsApp para 
 
 ## Fase 1: robustez (semana 1 de noviembre)
 
-- [ ] Leer el texto de los mensajes con link o que responden a otro (`extendedTextMessage.text`), que hoy dan 422
-- [ ] Aceptar audios, imágenes y stickers sin error: guardarlos como `desconocido`
+- [x] Leer el texto de los mensajes con link o que responden a otro (`extendedTextMessage.text`), que hoy dan 422
+- [x] Aceptar audios, imágenes y stickers sin error: guardarlos como `desconocido`
+- [ ] Leer el texto de las fotos con descripción (`imageMessage.caption`)
 - [ ] Base de datos separada para los tests locales
 - [ ] Logs claros de cada mensaje procesado
 

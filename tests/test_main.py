@@ -29,7 +29,7 @@ def test_mensaje_nuevo_devuelve_ok():
     assert respuesta.status_code == 200 
     assert respuesta.json()["status"] == "ok"
 
-def test_payload_sin_texto_no_rompe ():
+def test_payload_sin_texto_no_rompe():
     payload = {
         "data": {
             "key": {"id": nuevo_id(), "remoteJid": "5491160061295@s.whatsapp.net"},
@@ -79,8 +79,8 @@ def test_categoria_se_guarda_en_la_base():
             "key": {"id": mensaje_id, "remoteJid": "5491160061295@s.whatsapp.net"},
             "message": {"conversation": "Hola, vi el depto"}
         }   
-   
     }
+    
     client.post("/webhook/whatsapp", json=payload)
     with get_conn() as conn:
         fila = conn.execute(
@@ -89,7 +89,7 @@ def test_categoria_se_guarda_en_la_base():
         ).fetchone()
     assert fila[0] == "lead"
 
-def test_sin_toke_devuelve_401():
+def test_sin_token_devuelve_401():
     payload = {
         "data": {
             "key": {"id": nuevo_id(), "remoteJid": "5491160061295@s.whatsapp.net"},
@@ -120,3 +120,36 @@ def test_token_por_url_funciona():
     sin_header = TestClient(app)
     respuesta = sin_header.post("/webhook/whatsapp?token=token-de-prueba", json=payload)
     assert respuesta.status_code == 200
+
+def test_mensaje_con_link_lee_extended_text():
+    payload = {
+        "data": {
+            "key": {"id": nuevo_id(), "remoteJid": "5491160061295@s.whatsapp.net"},
+            "message": {"extendedTextMessage": {"text": "Hola, vi este depto https://ejemplo.com"}}
+        }
+    }
+    respuesta = client.post("/webhook/whatsapp", json=payload)
+    assert respuesta.status_code == 200
+    assert respuesta.json()["categoria"] == "lead"
+
+def test_imagen_no_rompe():
+    payload = {
+        "data": {
+            "key": {"id": nuevo_id(), "remoteJid": "5491160061295@s.whatsapp.net"},
+            "message": {"imageMessage": {"mimetype": "image/jpeg"}}
+        }
+    }
+    respuesta = client.post("/webhook/whatsapp", json=payload)
+    assert respuesta.status_code == 200
+    assert respuesta.json()["categoria"] == "desconocido"
+
+def test_audio_no_rompe():
+    payload = {
+        "data": {
+            "key": {"id": nuevo_id(), "remoteJid": "5491160061295@s.whatsapp.net"},
+            "message": {"audioMessage": {"seconds": 7}}
+        }
+    }
+    respuesta = client.post("/webhook/whatsapp", json=payload)
+    assert respuesta.status_code == 200
+    assert respuesta.json()["categoria"] == "desconocido"
