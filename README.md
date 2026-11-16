@@ -1,67 +1,122 @@
 # velia-core
 
-Núcleo en Python de **Velia**, un agente de IA para WhatsApp que clasifica conversaciones, califica leads y los deriva a vendedores. Hoy Velia corre en n8n; este repo es la reescritura de su núcleo en código.
+Python core of **Velia**, a WhatsApp AI agent that classifies conversations, qualifies leads and routes them to salespeople. Velia runs on n8n today; this repo is the rewrite of its core in code.
 
-## Qué hace hoy
+**Status:** deployed and running in shadow mode on a self-hosted server. It currently processes test traffic — no external customer depends on it yet. A first external pilot is the next milestone.
 
-- Recibe mensajes de WhatsApp (formato de Evolution API) en un webhook con FastAPI.
-- Valida el payload con Pydantic.
-- Descarta mensajes duplicados con una restricción única en PostgreSQL (Supabase).
-- Clasifica cada mensaje nuevo como lead, cliente o spam con un LLM vía Groq y devuelve la categoría en la respuesta del webhook. Si el mensaje llega vacío, no llama al modelo.
+---
 
-## Stack
+## What it does today
 
-Python 3.13 · FastAPI · Pydantic · PostgreSQL (Supabase) · psycopg · httpx · pytest
+**Ingestion**
+- FastAPI webhook that receives WhatsApp messages in Evolution API format.
+- Payload validated with Pydantic.
+- Duplicate messages dropped through a unique constraint in PostgreSQL (Supabase), not in memory.
+- Protected with a secret token compared in constant time.
+- Accepts link, audio and image messages (fixed a 422 that rejected them in production).
 
-## Cómo correrlo
+**Classification**
+- `src/clasificador.py` classifies every message as `lead`, `cliente` or `spam` using an LLM through Groq at `temperature 0`.
+- If the model answers anything outside those three categories, the message is stored as `desconocido` rather than inventing one.
+- The category is persisted with the message.
 
-1. Instalar las dependencias:
+**Semantic search**
+- Local embeddings over a property catalog, stored in pgvector.
+- Combined with exact SQL filters (operation, area, max price), so the model narrows and the database decides.
 
-```
-python -m pip install -r requirements.txt
-```
+**Slack bot**
+- Answers questions using that search.
+- An LLM extracts the filters from the question as structured output validated with Pydantic.
+- Safe fallback when the model answers badly or the API fails.
 
-2. Copiar `.env.example` como `.env` y completar los valores.
-3. La base necesita una tabla `mensajes_procesados` con `message_id` único.
-4. Levantar el servidor:
+---
 
-```
-python src/main.py
-```
+## Measurement
 
-5. Correr los tests:
+Model quality is measured with evaluation sets, separately from the test suite.
 
-```
-python -m pytest -v
-```
+**Message classifier — 20/20**
 
-## Decisiones de diseño
+`evals/mensajes.csv` holds 20 real real-estate messages with their correct category, including hard cases: transcribed audio without accents, tenants asking about a different property, disguised spam.
 
-- **Deduplicación en la base, no en memoria.** El webhook puede recibir el mismo mensaje más de una vez. La restricción única en PostgreSQL sigue funcionando aunque el servidor se reinicie o lleguen dos webhooks a la vez.
-- **Tests repetibles.** Cada test genera un ID único con `uuid`, así el resultado no depende de lo que quedó guardado en la base.
-- **El modelo solo se llama si hace falta.** Un mensaje vacío (por ejemplo, un sticker) queda como `desconocido` sin gastar una llamada a la API.
-- **El LLM se reemplaza en los tests.** Con `monkeypatch`, los tests usan un clasificador falso: son rápidos, gratis y siempre dan el mismo resultado. La calidad del modelo se mide aparte, con el set de evaluación.
-
-## Clasificador de mensajes
-
-`src/clasificador.py` clasifica cada mensaje en `lead`, `cliente` o `spam` usando un modelo vía Groq, con `temperature 0`. Si el modelo responde algo fuera de esas tres categorías, el mensaje queda como `desconocido` en lugar de inventar una.
-
-### Set de evaluación
-
-`evals/mensajes.csv` tiene 20 mensajes reales del rubro inmobiliario con su categoría correcta, incluidos casos difíciles (audios transcriptos sin tildes, inquilinos que preguntan por otra propiedad, spam disfrazado).
-
-```
+```bash
 python evals/run_evals.py
 ```
 
-Resultado actual: **20/20**. La primera versión dio 19/20: un inquilino que preguntaba por otra propiedad salió como lead. Definí la regla de negocio (sigue siendo cliente), la agregué al prompt y volví a medir para confirmar que no se rompiera ningún otro caso.
+The first run scored 19/20. A tenant asking about another property came out as `lead`. That was not a model failure — it was a missing business rule. I defined the rule (a tenant is still a `cliente`), added it to the prompt, and re-ran the full set to confirm nothing else broke.
 
-## CI
+**Semantic search — hit@3 8/8**
 
-En cada push, GitHub Actions levanta un PostgreSQL temporal, crea la tabla desde `schema.sql`, corre los tests y construye la imagen de Docker. Los tests no usan la base de producción ni llaman a la API del modelo.
+Measured with its own evaluation set: the correct property appears in the top 3 results in 8 of 8 queries.
 
-## Próximos pasos
+---
 
-- Guardar la categoría de cada mensaje en la base.
-- Validar un token secreto en el webhook.
-- Deploy en Easypanel.
+## Tests and CI
+
+- 18 pytest tests with the LLM mocked, including its failure cases.
+- On every push, GitHub Actions spins up a temporary PostgreSQL, creates the schema from `schema.sql`, runs the tests and builds the Docker image.
+- Tests never touch the production database and never call the model's API.
+
+---
+
+## Deployment
+
+Docker on a self-hosted server (Easypanel, Traefik, HTTPS), running in **shadow mode**: the n8n agent forwards every incoming message, which is classified and stored without touching the live reply path. This lets the Python core be validated against real message formats before it takes over any customer-facing behaviour.
+
+---
+
+## Stack
+
+Python 3.13 · FastAPI · Pydantic · PostgreSQL (Supabase) · pgvector · psycopg · httpx · Slack Bolt · pytest · Docker · GitHub Actions
+
+---
+
+## Design decisions
+
+**Deduplication in the database, not in memory.** The webhook can receive the same message more than once. A unique constraint in PostgreSQL keeps working after a restart and when two webhooks arrive at the same time.
+
+**The model is only called when it is needed.** An empty message (a sticker, for example) is stored as `desconocido` without spending an API call.
+
+**The LLM is replaced in the tests.** With `monkeypatch`, the tests use a fake classifier: fast, free and deterministic. Model quality is measured separately, with the evaluation sets.
+
+**Repeatable tests.** Each test generates a unique ID with `uuid`, so results never depend on what a previous run left in the database.
+
+**Scoring in code, not in the prompt.** The model extracts structured data; the lead score is calculated in code with explicit rules, so results stay predictable when the model changes.
+
+**Degrade, do not guess.** Every LLM call has a defined fallback. An unparseable answer becomes `desconocido`; a failed API call returns a safe response instead of a wrong one.
+
+---
+
+## Running it
+
+1. Install dependencies:
+
+```bash
+python -m pip install -r requirements.txt
+```
+
+2. Copy `.env.example` to `.env` and fill in the values.
+3. The database needs the schema in `schema.sql`.
+4. Start the server:
+
+```bash
+python src/main.py
+```
+
+5. Run the tests:
+
+```bash
+python -m pytest -v
+```
+
+---
+
+## What's next
+
+- **First external pilot.** Run the core against a real business's traffic and measure before and after.
+- **Tracing and observability** for LLM calls, so quality is monitored continuously instead of only at evaluation time.
+- **Move more of the n8n agent into the core**, starting with lead qualification.
+
+---
+
+Built by [Gonzalo Arrieta](https://github.com/GonzaloArrieta) · [LinkedIn](https://linkedin.com/in/pablo-gonzalo-arrieta)
